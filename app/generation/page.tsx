@@ -107,6 +107,7 @@ function AISandboxPage() {
   const [isStartingNewGeneration, setIsStartingNewGeneration] = useState(false);
   const [sandboxFiles, setSandboxFiles] = useState<Record<string, string>>({});
   const [hasInitialSubmission, setHasInitialSubmission] = useState<boolean>(false);
+  const [pendingAppPrompt, setPendingAppPrompt] = useState('');
   const [fileStructure, setFileStructure] = useState<string>('');
   
   const [conversationContext, setConversationContext] = useState<{
@@ -176,6 +177,7 @@ function AISandboxPage() {
       
       // Then check session storage as fallback
       const storedUrl = urlParam || sessionStorage.getItem('targetUrl');
+      const storedAppPrompt = sessionStorage.getItem('appPrompt');
       const storedStyle = templateParam || sessionStorage.getItem('selectedStyle');
       const storedModel = sessionStorage.getItem('selectedModel');
       const storedInstructions = sessionStorage.getItem('additionalInstructions');
@@ -243,6 +245,14 @@ function AISandboxPage() {
         
         // Also set autoStart flag for the effect
         sessionStorage.setItem('autoStart', 'true');
+      } else if (storedAppPrompt) {
+        setHasInitialSubmission(true);
+        setPendingAppPrompt(storedAppPrompt);
+        sessionStorage.removeItem('appPrompt');
+        sessionStorage.removeItem('selectedModel');
+        if (storedModel) setAiModel(storedModel);
+        setShowHomeScreen(false);
+        setHomeScreenFading(false);
       }
       
       // Clear old conversation
@@ -331,6 +341,14 @@ function AISandboxPage() {
       captureUrlScreenshot(screenshotUrl);
     }
   }, [showHomeScreen, homeUrlInput]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!pendingAppPrompt || !sandboxData || generationProgress.isGenerating) return;
+    const prompt = pendingAppPrompt;
+    setPendingAppPrompt('');
+    setActiveTab('generation');
+    void sendChatMessage(prompt);
+  }, [pendingAppPrompt, sandboxData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-start generation if flagged
   useEffect(() => {
@@ -1716,8 +1734,8 @@ Tip: I automatically detect and install npm packages from your code imports (lik
     return null;
   };
 
-  const sendChatMessage = async () => {
-    const message = aiChatInput.trim();
+  const sendChatMessage = async (messageOverride?: string) => {
+    const message = (messageOverride ?? aiChatInput).trim();
     if (!message) return;
     
     if (!aiEnabled) {
