@@ -1840,6 +1840,7 @@ Tip: I automatically detect and install npm packages from your code imports (lik
       let generatedCode = '';
       let explanation = '';
       let buffer = ''; // Buffer for incomplete lines
+      let streamedError = '';
       
       if (reader) {
         while (true) {
@@ -2061,7 +2062,7 @@ Tip: I automatically detect and install npm packages from your code imports (lik
                     files: prev.files.length > 0 ? prev.files : parsedFiles
                   }));
                 } else if (data.type === 'error') {
-                  throw new Error(data.error);
+                  streamedError = data.message || data.error || 'AI generation failed';
                 }
               } catch (e) {
                 console.error('Failed to parse SSE data:', e);
@@ -2069,6 +2070,10 @@ Tip: I automatically detect and install npm packages from your code imports (lik
             }
           }
         }
+      }
+
+      if (streamedError) {
+        throw new Error(streamedError);
       }
       
       if (generatedCode) {
