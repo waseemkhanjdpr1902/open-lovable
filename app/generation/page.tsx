@@ -107,7 +107,6 @@ function AISandboxPage() {
   const [isStartingNewGeneration, setIsStartingNewGeneration] = useState(false);
   const [sandboxFiles, setSandboxFiles] = useState<Record<string, string>>({});
   const [hasInitialSubmission, setHasInitialSubmission] = useState<boolean>(false);
-  const [pendingAppPrompt, setPendingAppPrompt] = useState('');
   const [fileStructure, setFileStructure] = useState<string>('');
   
   const [conversationContext, setConversationContext] = useState<{
@@ -160,6 +159,7 @@ function AISandboxPage() {
 
   // Store flag to trigger generation after component mounts
   const [shouldAutoGenerate, setShouldAutoGenerate] = useState(false);
+  const [pendingAppPrompt, setPendingAppPrompt] = useState('');
 
   // Clear old conversation data on component mount and create/restore sandbox
   useEffect(() => {
@@ -177,10 +177,10 @@ function AISandboxPage() {
       
       // Then check session storage as fallback
       const storedUrl = urlParam || sessionStorage.getItem('targetUrl');
-      const storedAppPrompt = sessionStorage.getItem('appPrompt');
       const storedStyle = templateParam || sessionStorage.getItem('selectedStyle');
       const storedModel = sessionStorage.getItem('selectedModel');
       const storedInstructions = sessionStorage.getItem('additionalInstructions');
+      const storedAppPrompt = sessionStorage.getItem('appPrompt');
       
       if (storedUrl) {
         // Mark that we have an initial submission since we're loading with a URL
@@ -249,8 +249,12 @@ function AISandboxPage() {
         setHasInitialSubmission(true);
         setPendingAppPrompt(storedAppPrompt);
         sessionStorage.removeItem('appPrompt');
-        sessionStorage.removeItem('selectedModel');
-        if (storedModel) setAiModel(storedModel);
+
+        if (storedModel) {
+          setAiModel(storedModel);
+          sessionStorage.removeItem('selectedModel');
+        }
+
         setShowHomeScreen(false);
         setHomeScreenFading(false);
       }
@@ -342,14 +346,6 @@ function AISandboxPage() {
     }
   }, [showHomeScreen, homeUrlInput]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (!pendingAppPrompt || !sandboxData || generationProgress.isGenerating) return;
-    const prompt = pendingAppPrompt;
-    setPendingAppPrompt('');
-    setActiveTab('generation');
-    void sendChatMessage(prompt);
-  }, [pendingAppPrompt, sandboxData]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Auto-start generation if flagged
   useEffect(() => {
     const autoStart = sessionStorage.getItem('autoStart');
@@ -395,6 +391,17 @@ function AISandboxPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shouldAutoGenerate, homeUrlInput, showHomeScreen]);
+
+  // Start a new app from a plain-language request once its sandbox is ready.
+  useEffect(() => {
+    if (!pendingAppPrompt || !sandboxData || generationProgress.isGenerating) return;
+
+    const prompt = pendingAppPrompt;
+    setPendingAppPrompt('');
+    setActiveTab('generation');
+    void sendChatMessage(prompt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAppPrompt, sandboxData]);
 
   const updateStatus = (text: string, active: boolean) => {
     setStatus({ text, active });
@@ -3816,3 +3823,169 @@ Focus on the key sections and content, making it clean and modern.`;
                     </div>
                   ))}
                   
+                  {/* Show current file being generated */}
+                  {generationProgress.currentFile && (
+                    <div className="flex items-center gap-1 px-2 py-1 bg-[#36322F]/70 text-white rounded-[10px] text-sm animate-pulse"
+                      style={{ animationDelay: `${generationProgress.files.length * 30}ms` }}>
+                      <div className="w-16 h-16 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      {generationProgress.currentFile.path.split('/').pop()}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Live streaming response display */}
+                {generationProgress.streamedCode && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="mt-3 border-t border-gray-300 pt-3"
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+                        <span className="text-xs font-medium text-gray-600">AI Response Stream</span>
+                      </div>
+                      <div className="flex-1 h-px bg-gradient-to-r from-gray-300 to-transparent" />
+                    </div>
+                    <div className="bg-gray-900 border border-gray-700 rounded max-h-128 overflow-y-auto scrollbar-hide">
+                      <SyntaxHighlighter
+                        language="jsx"
+                        style={vscDarkPlus}
+                        customStyle={{
+                          margin: 0,
+                          padding: '0.75rem',
+                          fontSize: '11px',
+                          lineHeight: '1.5',
+                          background: 'transparent',
+                          maxHeight: '8rem',
+                          overflow: 'hidden'
+                        }}
+                      >
+                        {(() => {
+                          const lastContent = generationProgress.streamedCode.slice(-1000);
+                          // Show the last part of the stream, starting from a complete tag if possible
+                          const startIndex = lastContent.indexOf('<');
+                          return startIndex !== -1 ? lastContent.slice(startIndex) : lastContent;
+                        })()}
+                      </SyntaxHighlighter>
+                      <span className="inline-block w-3 h-4 bg-orange-400 ml-3 mb-3 animate-pulse" />
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 border-t border-border bg-background-base">
+            <HeroInput
+              value={aiChatInput}
+              onChange={setAiChatInput}
+              onSubmit={sendChatMessage}
+              placeholder="Describe what you want to build..."
+              showSearchFeatures={false}
+            />
+          </div>
+        </div>
+
+        {/* Right Panel - Preview or Generation (2/3 of remaining width) */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="px-3 pt-4 pb-4 bg-white border-b border-gray-200 flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              {/* Toggle-style Code/View switcher */}
+              <div className="inline-flex bg-gray-100 border border-gray-200 rounded-md p-0.5">
+                <button
+                  onClick={() => setActiveTab('generation')}
+                  className={`px-3 py-1 rounded transition-all text-xs font-medium ${
+                    activeTab === 'generation' 
+                      ? 'bg-white text-gray-900 shadow-sm' 
+                      : 'bg-transparent text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                    </svg>
+                    <span>Code</span>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setActiveTab('preview')}
+                  className={`px-3 py-1 rounded transition-all text-xs font-medium ${
+                    activeTab === 'preview' 
+                      ? 'bg-white text-gray-900 shadow-sm' 
+                      : 'bg-transparent text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    <span>View</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+            <div className="flex gap-2 items-center">
+              {/* Files generated count */}
+              {activeTab === 'generation' && !generationProgress.isEdit && generationProgress.files.length > 0 && (
+                <div className="text-gray-500 text-xs font-medium">
+                  {generationProgress.files.length} files generated
+                </div>
+              )}
+              
+              {/* Live Code Generation Status */}
+              {activeTab === 'generation' && generationProgress.isGenerating && (
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 border border-gray-200 rounded-md text-xs font-medium text-gray-700">
+                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                  {generationProgress.isEdit ? 'Editing code' : 'Live generation'}
+                </div>
+              )}
+              
+              {/* Sandbox Status Indicator */}
+              {sandboxData && (
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 border border-gray-200 rounded-md text-xs font-medium text-gray-700">
+                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
+                  Sandbox active
+                </div>
+              )}
+              
+              {/* Open in new tab button */}
+              {sandboxData && (
+                <a 
+                  href={sandboxData.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  title="Open in new tab"
+                  className="p-1.5 rounded-md transition-all text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                >
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              )}
+            </div>
+          </div>
+          <div className="flex-1 relative overflow-hidden">
+            {renderMainContent()}
+          </div>
+        </div>
+      </div>
+
+
+
+
+    </div>
+    </HeaderProvider>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <AISandboxPage />
+    </Suspense>
+  );
+}
