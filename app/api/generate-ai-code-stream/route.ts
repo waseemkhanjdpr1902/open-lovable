@@ -1528,15 +1528,36 @@ It's better to have 3 complete files than 10 incomplete files.`
               : 'Gemini did not respond. Trying the Groq backup...'
           });
 
-          const fallbackOptions: any = {
-            ...streamOptions,
-            model: groq('llama-3.3-70b-versatile'),
-            maxOutputTokens: 8192,
-          };
-          delete fallbackOptions.maxTokens;
+          const groqFallbackModels = [
+            'openai/gpt-oss-120b',
+            'qwen/qwen3.6-27b',
+          ];
+          const fallbackErrors: string[] = [];
 
-          const fallbackResult = await generateText(fallbackOptions);
-          generatedCode = fallbackResult.text || '';
+          for (const fallbackModel of groqFallbackModels) {
+            try {
+              await sendProgress({
+                type: 'status',
+                message: `Trying backup model ${fallbackModel}...`
+              });
+
+              const fallbackOptions: any = {
+                ...streamOptions,
+                model: groq(fallbackModel),
+                maxOutputTokens: 8192,
+              };
+              delete fallbackOptions.maxTokens;
+
+              const fallbackResult = await generateText(fallbackOptions);
+              generatedCode = fallbackResult.text || '';
+              if (generatedCode.trim()) break;
+              fallbackErrors.push(`${fallbackModel}: returned no code`);
+            } catch (fallbackError) {
+              const message = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+              fallbackErrors.push(`${fallbackModel}: ${message}`);
+              console.error(`[generate-ai-code-stream] Groq fallback ${fallbackModel} failed:`, fallbackError);
+            }
+          }
 
           if (generatedCode.trim()) {
             await sendProgress({
@@ -1545,7 +1566,7 @@ It's better to have 3 complete files than 10 incomplete files.`
               raw: true
             });
           } else {
-            throw new Error('Both Gemini and the Groq backup returned no application code.');
+            throw new Error(`Gemini and all Groq backups failed. ${fallbackErrors.join(' | ')}`);
           }
         }
         
