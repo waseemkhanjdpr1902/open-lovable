@@ -10,11 +10,11 @@ Enable Production, Preview, and Development for the first test deployment.
 | `FIRECRAWL_API_KEY` | Firecrawl dashboard → API Keys |
 | `GEMINI_API_KEY` | Google AI Studio → Get API key |
 | `SANDBOX_PROVIDER` | Enter the literal value `vercel` |
-| `VERCEL_TEAM_ID` | Vercel team Settings → General → Team ID |
-| `VERCEL_PROJECT_ID` | Codely project Settings → General → Project ID |
-| `VERCEL_TOKEN` | Vercel Account Settings → Tokens |
+Vercel automatically injects `VERCEL_OIDC_TOKEN` into deployments, so you do not
+need to create a permanent Vercel token for the normal hosted setup.
 
-`MORPH_API_KEY` is optional and can be added later.
+`VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`, and `VERCEL_TOKEN` are fallback values for
+environments where OIDC is unavailable. `MORPH_API_KEY` is also optional.
 
 ## Import and deploy
 
