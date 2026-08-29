@@ -1393,7 +1393,11 @@ It's better to have 3 complete files than 10 incomplete files.`
         // Buffer for incomplete tags
         let tagBuffer = '';
         
-        // Stream the response and parse for packages in real-time
+        // Stream the response and parse for packages in real-time. Provider
+        // failures often surface while consuming textStream rather than when
+        // streamText() is initialized, so preserve the error for failover.
+        let primaryStreamError: unknown = null;
+        try {
         for await (const textPart of result?.textStream || []) {
           const text = textPart || '';
           generatedCode += text;
@@ -1502,6 +1506,12 @@ It's better to have 3 complete files than 10 incomplete files.`
             currentFilePath = '';
           }
         }
+        } catch (streamError) {
+          primaryStreamError = streamError;
+          console.error('[generate-ai-code-stream] Provider stream failed:', streamError);
+          if (!isGoogle) throw streamError;
+          generatedCode = '';
+        }
 
         // Gemini can occasionally finish without returning usable text. In that
         // case, transparently retry the same request with Groq so the user does
@@ -1513,7 +1523,9 @@ It's better to have 3 complete files than 10 incomplete files.`
 
           await sendProgress({
             type: 'status',
-            message: 'Gemini did not respond. Trying the backup AI provider...'
+            message: primaryStreamError
+              ? 'Gemini failed. Trying the Groq backup...'
+              : 'Gemini did not respond. Trying the Groq backup...'
           });
 
           const fallbackOptions: any = {
