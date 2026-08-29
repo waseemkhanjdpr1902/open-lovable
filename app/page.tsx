@@ -134,56 +134,9 @@ export default function HomePage() {
         router.push('/generation');
       }
     } else {
-      // It's a search term, fade out if results exist, then search
-      if (hasSearched && searchResults.length > 0) {
-        setIsFadingOut(true);
-        
-        setTimeout(async () => {
-          setSearchResults([]);
-          setIsFadingOut(false);
-          setShowSelectMessage(true);
-          
-          // Perform new search
-          await performSearch(inputValue);
-          setHasSearched(true);
-          setShowSearchTiles(true);
-          setShowSelectMessage(false);
-          
-          // Smooth scroll to carousel
-          setTimeout(() => {
-            const carouselSection = document.querySelector('.carousel-section');
-            if (carouselSection) {
-              carouselSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-          }, 300);
-        }, 500);
-      } else {
-        // First search, no fade needed
-        setShowSelectMessage(true);
-        setIsSearching(true);
-        setHasSearched(true);
-        setShowSearchTiles(true);
-        
-        // Scroll to carousel area immediately
-        setTimeout(() => {
-          const carouselSection = document.querySelector('.carousel-section');
-          if (carouselSection) {
-            carouselSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
-        }, 100);
-        
-        await performSearch(inputValue);
-        setShowSelectMessage(false);
-        setIsSearching(false);
-        
-        // Smooth scroll to carousel
-        setTimeout(() => {
-          const carouselSection = document.querySelector('.carousel-section');
-          if (carouselSection) {
-            carouselSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
-        }, 300);
-      }
+      sessionStorage.setItem('appPrompt', inputValue);
+      sessionStorage.setItem('selectedModel', selectedModel);
+      router.push('/generation');
     }
   };
 
@@ -378,7 +331,7 @@ export default function HomePage() {
                       )}
                       <input
                         className="flex-1 bg-transparent text-body-input text-accent-black placeholder:text-black-alpha-48 focus:outline-none focus:ring-0 focus:border-transparent"
-                        placeholder="Enter URL or search term..."
+                        placeholder="Describe an app, or paste a website URL to clone..."
                         type="text"
                         value={url}
                         disabled={isSearching}
@@ -416,7 +369,7 @@ export default function HomePage() {
                       >
                         <HeroInputSubmitButton 
                           dirty={url.length > 0} 
-                          buttonText={isURL(url) ? 'Scrape Site' : 'Search'} 
+                          buttonText={isURL(url) ? 'Clone Site' : 'Build My App'}
                           disabled={isSearching}
                         />
                       </div>
