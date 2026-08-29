@@ -3,7 +3,7 @@ import { createGroq } from '@ai-sdk/groq';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { streamText } from 'ai';
+import { generateText, streamText } from 'ai';
 import type { SandboxState } from '@/types/sandbox';
 import { selectFilesForEdit, getFileContents, formatFilesForAI } from '@/lib/context-selector';
 import { executeSearchPlan, formatSearchResultsForAI, selectTargetFile } from '@/lib/file-search-executor';
@@ -1502,6 +1502,40 @@ It's better to have 3 complete files than 10 incomplete files.`
             currentFilePath = '';
           }
         }
+
+        // Gemini can occasionally finish without returning usable text. In that
+        // case, transparently retry the same request with Groq so the user does
+        // not lose their work or need to choose another model manually.
+        if (!generatedCode.trim() && isGoogle) {
+          if (!process.env.GROQ_API_KEY) {
+            throw new Error('Gemini returned no application code and the Groq fallback is not configured. Add GROQ_API_KEY in Vercel.');
+          }
+
+          await sendProgress({
+            type: 'status',
+            message: 'Gemini did not respond. Trying the backup AI provider...'
+          });
+
+          const fallbackOptions: any = {
+            ...streamOptions,
+            model: groq('llama-3.3-70b-versatile'),
+            maxOutputTokens: 8192,
+          };
+          delete fallbackOptions.maxTokens;
+
+          const fallbackResult = await generateText(fallbackOptions);
+          generatedCode = fallbackResult.text || '';
+
+          if (generatedCode.trim()) {
+            await sendProgress({
+              type: 'stream',
+              text: generatedCode,
+              raw: true
+            });
+          } else {
+            throw new Error('Both Gemini and the Groq backup returned no application code.');
+          }
+        }
         
         console.log('\n\n[generate-ai-code-stream] Streaming complete.');
         
@@ -1863,7 +1897,8 @@ Provide the complete file content without any truncation. Include all necessary 
         } else {
           await sendProgress({ 
             type: 'error', 
-            error: (error as Error).message 
+            message: (error as Error).message,
+            error: (error as Error).message
           });
         }
       } finally {
