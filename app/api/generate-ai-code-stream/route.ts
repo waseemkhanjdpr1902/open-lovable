@@ -1533,6 +1533,18 @@ It's better to have 3 complete files than 10 incomplete files.`
             'qwen/qwen3.6-27b',
           ];
           const fallbackErrors: string[] = [];
+          // Groq developer accounts have a much smaller TPM allowance than
+          // Gemini. Do not reuse Gemini's large system/context payload here.
+          // A compact, bounded prompt keeps the whole request comfortably
+          // below the 8K TPM limit while retaining the user's requirements.
+          const compactFallbackSystem = `You are Codely, a senior React developer. Build a complete, functional, responsive Vite + React website from the user's request.
+Return only complete project files in this exact XML format:
+<file path="package.json">...</file>
+<file path="src/main.jsx">...</file>
+<file path="src/App.jsx">...</file>
+<file path="src/index.css">...</file>
+Include all required code. Use plain React and CSS unless a dependency is essential. Navigation, buttons, forms, validation, mobile layout and requested interactions must work. Do not use placeholders or omit file content.`;
+          const compactFallbackPrompt = prompt.slice(0, 12000);
 
           for (const fallbackModel of groqFallbackModels) {
             try {
@@ -1541,12 +1553,13 @@ It's better to have 3 complete files than 10 incomplete files.`
                 message: `Trying backup model ${fallbackModel}...`
               });
 
-              const fallbackOptions: any = {
-                ...streamOptions,
+              const fallbackOptions = {
                 model: groq(fallbackModel),
-                maxOutputTokens: 8192,
+                system: compactFallbackSystem,
+                prompt: compactFallbackPrompt,
+                maxOutputTokens: 6000,
+                temperature: 0.3,
               };
-              delete fallbackOptions.maxTokens;
 
               const fallbackResult = await generateText(fallbackOptions);
               generatedCode = fallbackResult.text || '';
