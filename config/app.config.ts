@@ -55,9 +55,6 @@ export const appConfig = {
     
     // Available models
     availableModels: [
-      'openai/gpt-5',
-      'moonshotai/kimi-k2-instruct-0905',
-      'anthropic/claude-sonnet-4-20250514',
       'google/gemini-3-pro-preview'
     ],
     
@@ -105,7 +102,7 @@ export const appConfig = {
   // UI Configuration
   ui: {
     // Show/hide certain UI elements
-    showModelSelector: true,
+    showModelSelector: false,
     showStatusIndicator: true,
     
     // Animation durations (milliseconds)
@@ -124,13 +121,13 @@ export const appConfig = {
   // Development Configuration
   dev: {
     // Enable debug logging
-    enableDebugLogging: true,
+    enableDebugLogging: false,
     
     // Enable performance monitoring
     enablePerformanceMonitoring: false,
     
     // Log API responses
-    logApiResponses: true,
+    logApiResponses: false,
   },
   
   // Package Installation Configuration

@@ -26,8 +26,8 @@ const robotoMono = Roboto_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Open Lovable v3",
-  description: "Re-imagine any website in seconds with AI-powered website builder.",
+  title: "Codely — Build websites and tools with AI",
+  description: "Describe your idea and Codely turns it into a working website or business tool.",
 };
 
 export default function RootLayout({

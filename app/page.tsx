@@ -238,12 +238,12 @@ export default function HomePage() {
               <div className="flex gap-8">
                 <a
                   className="contents"
-                  href="https://github.com/mendableai/open-lovable"
+                  href="https://github.com/waseemkhanjdpr1902/open-lovable"
                   target="_blank"
                 >
                   <ButtonUI variant="tertiary">
                     <GithubIcon />
-                    Use this Template
+                    View on GitHub
                   </ButtonUI>
                 </a>
               </div>
@@ -263,14 +263,14 @@ export default function HomePage() {
               <HomeHeroBadge />
               <HomeHeroTitle />
               <p className="text-center text-body-large">
-                Clone brand format or re-imagine any website, in seconds.
+                Describe what you need in plain language. No coding experience required.
               </p>
               <Link
                 className="bg-black-alpha-4 hover:bg-black-alpha-6 rounded-6 px-8 lg:px-6 text-label-large h-30 lg:h-24 block mt-8 mx-auto w-max gap-4 transition-all"
                 href="#"
                 onClick={(e) => e.preventDefault()}
               >
-                Powered by Firecrawl.
+                Build websites, calculators, booking tools, dashboards and more.
               </Link>
             </div>
           </div>
