@@ -24,7 +24,7 @@ export class VercelProvider extends SandboxProvider {
       // Create Vercel sandbox
       
       const sandboxConfig: any = {
-        timeout: 300000, // 5 minutes in ms
+        timeout: 900000, // 15 minutes for generation, editing, and recovery
         runtime: 'node22', // Use node22 runtime for Vercel sandboxes
         ports: [5173] // Vite port
       };
@@ -58,6 +58,33 @@ export class VercelProvider extends SandboxProvider {
     } catch (error) {
       console.error('[VercelProvider] Error creating sandbox:', error);
       throw error;
+    }
+  }
+
+  async reconnect(sandboxId: string): Promise<boolean> {
+    try {
+      const sandboxConfig: any = { sandboxId };
+      if (process.env.VERCEL_TOKEN && process.env.VERCEL_TEAM_ID && process.env.VERCEL_PROJECT_ID) {
+        sandboxConfig.teamId = process.env.VERCEL_TEAM_ID;
+        sandboxConfig.projectId = process.env.VERCEL_PROJECT_ID;
+        sandboxConfig.token = process.env.VERCEL_TOKEN;
+      } else if (process.env.VERCEL_OIDC_TOKEN) {
+        sandboxConfig.oidcToken = process.env.VERCEL_OIDC_TOKEN;
+      }
+
+      this.sandbox = await Sandbox.get(sandboxConfig);
+      this.sandboxInfo = {
+        sandboxId,
+        url: this.sandbox.domain(5173),
+        provider: 'vercel',
+        createdAt: new Date(),
+      };
+      return true;
+    } catch (error) {
+      console.warn(`[VercelProvider] Could not reconnect to sandbox ${sandboxId}:`, error);
+      this.sandbox = null;
+      this.sandboxInfo = null;
+      return false;
     }
   }
 
