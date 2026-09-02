@@ -51,11 +51,11 @@ export const appConfig = {
   // AI Model Configuration
   ai: {
     // Default AI model
-    defaultModel: 'google/gemini-3.5-flash',
+    defaultModel: 'google/gemini-3.7-flash',
     
     // Available models
     availableModels: [
-      'google/gemini-3.5-flash'
+      'google/gemini-3.7-flash'
     ],
     
     // Model display names
@@ -63,7 +63,7 @@ export const appConfig = {
       'openai/gpt-5': 'GPT-5',
       'moonshotai/kimi-k2-instruct-0905': 'Kimi K2 (Groq)',
       'anthropic/claude-sonnet-4-20250514': 'Sonnet 4',
-      'google/gemini-3.5-flash': 'Gemini 3.5 Flash'
+      'google/gemini-3.7-flash': 'Gemini 3.7 Flash'
     } as Record<string, string>,
     
     // Model API configuration
@@ -78,7 +78,7 @@ export const appConfig = {
     defaultTemperature: 0.7,
     
     // Max tokens for code generation
-    maxTokens: 8000,
+    maxTokens: 24000,
     
     // Max tokens for truncation recovery
     truncationRecoveryMaxTokens: 4000,
