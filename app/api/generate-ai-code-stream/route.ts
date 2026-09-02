@@ -1333,6 +1333,7 @@ It's better to have 3 complete files than 10 incomplete files.`
         let result;
         let retryCount = 0;
         const maxRetries = 2;
+        let googleInitializationError: unknown = null;
         
         while (retryCount <= maxRetries) {
           try {
@@ -1379,20 +1380,24 @@ It's better to have 3 complete files than 10 incomplete files.`
                 actualModel = 'gpt-4-turbo';
               }
             } else {
-              // Final error, send to user
-              await sendProgress({ 
-                type: 'error', 
-                message: `Failed to initialize ${isGoogle ? 'Gemini' : isAnthropic ? 'Claude' : isOpenAI ? 'GPT-5' : isKimiGroq ? 'Kimi (Groq)' : 'Groq'} streaming: ${streamError.message}` 
-              });
-              
-              // If this is a Google model error, provide helpful info
               if (isGoogle) {
                 await sendProgress({ 
-                  type: 'info', 
-                  message: 'Tip: Make sure your GEMINI_API_KEY is set correctly and has proper permissions.' 
+                  type: 'status',
+                  message: 'Gemini is unavailable. Switching to the backup model...'
+                });
+              } else {
+                await sendProgress({
+                  type: 'error',
+                  message: `Failed to initialize ${isAnthropic ? 'Claude' : isOpenAI ? 'GPT-5' : isKimiGroq ? 'Kimi (Groq)' : 'Groq'} streaming: ${streamError.message}`
                 });
               }
               
+              if (isGoogle) {
+                // Google/Gateway authorization and model errors must flow into
+                // the configured Groq fallback instead of ending the request.
+                googleInitializationError = streamError;
+                break;
+              }
               throw streamError;
             }
           }
@@ -1413,7 +1418,7 @@ It's better to have 3 complete files than 10 incomplete files.`
         // Stream the response and parse for packages in real-time. Provider
         // failures often surface while consuming textStream rather than when
         // streamText() is initialized, so preserve the error for failover.
-        let primaryStreamError: unknown = null;
+        let primaryStreamError: unknown = googleInitializationError;
         try {
         for await (const textPart of result?.textStream || []) {
           const text = textPart || '';
