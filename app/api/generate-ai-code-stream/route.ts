@@ -1340,7 +1340,19 @@ It's better to have 3 complete files than 10 incomplete files.`
         
         while (retryCount <= maxRetries) {
           try {
-            result = await streamText(streamOptions);
+            if (isGoogle) {
+              // Some Gemini/Gateway combinations complete their text stream
+              // without yielding chunks even though a non-streaming response is
+              // available. Generate once, then feed the same parser below.
+              const generated = await generateText(streamOptions);
+              result = {
+                textStream: (async function* () {
+                  if (generated.text) yield generated.text;
+                })(),
+              };
+            } else {
+              result = await streamText(streamOptions);
+            }
             break; // Success, exit retry loop
           } catch (streamError: any) {
             console.error(`[generate-ai-code-stream] Error calling streamText (attempt ${retryCount + 1}/${maxRetries + 1}):`, streamError);
@@ -1577,7 +1589,9 @@ Spend the available output budget on implementation detail. Prefer 5-8 complete,
                 model: isUsingAIGateway ? aiGateway(fallbackModel) : groq(fallbackModel),
                 system: compactFallbackSystem,
                 prompt: compactFallbackPrompt,
-                maxOutputTokens: 8000,
+                // Keep input + requested output below Groq's 8K developer TPM
+                // allowance so the emergency path remains usable.
+                maxOutputTokens: 7000,
                 temperature: 0.3,
               };
 
