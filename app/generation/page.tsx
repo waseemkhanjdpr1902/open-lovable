@@ -88,6 +88,11 @@ function AISandboxPage() {
   const [showHomeScreen, setShowHomeScreen] = useState(true);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['app', 'src', 'src/components']));
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [selectedFileContent, setSelectedFileContent] = useState('');
+  const [fileSaveState, setFileSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [lastAttemptedPrompt, setLastAttemptedPrompt] = useState('');
+  const [recoveredLocally, setRecoveredLocally] = useState(false);
   const [homeScreenFading, setHomeScreenFading] = useState(false);
   const [homeUrlInput, setHomeUrlInput] = useState('');
   const [homeContextInput, setHomeContextInput] = useState('');
@@ -160,6 +165,36 @@ function AISandboxPage() {
   // Store flag to trigger generation after component mounts
   const [shouldAutoGenerate, setShouldAutoGenerate] = useState(false);
   const [pendingAppPrompt, setPendingAppPrompt] = useState('');
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('codely:last-project');
+      if (!raw) return;
+      const snapshot = JSON.parse(raw);
+      if (!Array.isArray(snapshot.files) || snapshot.files.length === 0) return;
+      setGenerationProgress(prev => ({ ...prev, files: snapshot.files }));
+      setPromptInput(typeof snapshot.generatedCode === 'string' ? snapshot.generatedCode : '');
+      setLastAttemptedPrompt(typeof snapshot.prompt === 'string' ? snapshot.prompt : '');
+      setRecoveredLocally(true);
+    } catch (error) {
+      console.warn('[local-recovery] Could not restore project:', error);
+      localStorage.removeItem('codely:last-project');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (generationProgress.files.length === 0) return;
+    try {
+      localStorage.setItem('codely:last-project', JSON.stringify({
+        savedAt: Date.now(),
+        prompt: lastAttemptedPrompt,
+        generatedCode: promptInput,
+        files: generationProgress.files,
+      }));
+    } catch (error) {
+      console.warn('[local-recovery] Could not save project:', error);
+    }
+  }, [generationProgress.files, lastAttemptedPrompt, promptInput]);
 
   // Clear old conversation data on component mount and create/restore sandbox
   useEffect(() => {
@@ -1330,40 +1365,37 @@ Tip: I automatically detect and install npm packages from your code imports (lik
                           {getFileIcon(selectedFile)}
                           <span className="font-mono text-sm">{selectedFile}</span>
                         </div>
-                        <button
-                          onClick={() => setSelectedFile(null)}
-                          className="hover:bg-black/20 p-1 rounded transition-colors"
-                        >
-                          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs ${fileSaveState === 'error' ? 'text-red-300' : 'text-gray-300'}`}>
+                            {fileSaveState === 'saving' ? 'Saving…' : fileSaveState === 'saved' ? 'Saved' : fileSaveState === 'error' ? 'Save failed' : 'Editable'}
+                          </span>
+                          <button
+                            onClick={saveSelectedFile}
+                            disabled={!sandboxData || fileSaveState === 'saving'}
+                            className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Save & refresh
+                          </button>
+                          <button onClick={() => setSelectedFile(null)} className="hover:bg-black/20 p-1 rounded transition-colors" aria-label="Close file editor">
+                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
-                      <div className="bg-gray-900 border border-gray-700 rounded">
-                        <SyntaxHighlighter
-                          language={(() => {
-                            const ext = selectedFile.split('.').pop()?.toLowerCase();
-                            if (ext === 'css') return 'css';
-                            if (ext === 'json') return 'json';
-                            if (ext === 'html') return 'html';
-                            return 'jsx';
-                          })()}
-                          style={vscDarkPlus}
-                          customStyle={{
-                            margin: 0,
-                            padding: '1rem',
-                            fontSize: '0.875rem',
-                            background: 'transparent',
-                          }}
-                          showLineNumbers={true}
-                        >
-                          {(() => {
-                            // Find the file content from generated files
-                            const file = generationProgress.files.find(f => f.path === selectedFile);
-                            return file?.content || '// File content will appear here';
-                          })()}
-                        </SyntaxHighlighter>
-                      </div>
+                      <textarea
+                        value={selectedFileContent}
+                        onChange={(event) => { setSelectedFileContent(event.target.value); setFileSaveState('idle'); }}
+                        onKeyDown={(event) => {
+                          if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+                            event.preventDefault();
+                            void saveSelectedFile();
+                          }
+                        }}
+                        spellCheck={false}
+                        aria-label={`Edit ${selectedFile}`}
+                        className="h-[calc(100vh-260px)] min-h-[420px] w-full resize-none border-0 bg-gray-950 p-4 font-mono text-sm leading-6 text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
+                      />
                     </div>
                   </div>
                 ) : /* If no files parsed yet, show loading or raw stream */
@@ -1627,6 +1659,26 @@ Tip: I automatically detect and install npm packages from your code imports (lik
               allow="clipboard-write"
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
             />
+
+            {generationError && (
+              <div className="absolute left-4 top-4 z-20 max-w-lg rounded-xl border border-red-200 bg-white/95 p-4 shadow-xl backdrop-blur-sm">
+                <p className="text-sm font-semibold text-red-700">The last generation did not finish</p>
+                <p className="mt-1 text-xs leading-5 text-gray-600">{generationError}</p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void sendChatMessage(lastAttemptedPrompt)}
+                    disabled={!lastAttemptedPrompt || generationProgress.isGenerating}
+                    className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-500 disabled:opacity-50"
+                  >
+                    Retry safely
+                  </button>
+                  <button type="button" onClick={() => setGenerationError(null)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                    Keep last good version
+                  </button>
+                </div>
+              </div>
+            )}
             
             {/* Package installation overlay - shows when installing packages or applying code */}
             {codeApplicationState.stage && codeApplicationState.stage !== 'complete' && (
@@ -1744,6 +1796,8 @@ Tip: I automatically detect and install npm packages from your code imports (lik
   const sendChatMessage = async (messageOverride?: string) => {
     const message = (messageOverride ?? aiChatInput).trim();
     if (!message) return;
+    setLastAttemptedPrompt(message);
+    setGenerationError(null);
     
     if (!aiEnabled) {
       addChatMessage('AI is disabled. Please enable it first.', 'system');
@@ -2075,6 +2129,10 @@ Tip: I automatically detect and install npm packages from your code imports (lik
       if (streamedError) {
         throw new Error(streamedError);
       }
+
+      if (!generatedCode.trim()) {
+        throw new Error('The AI provider returned no usable project files. Please retry.');
+      }
       
       if (generatedCode) {
         // Parse files from generated code for metadata
@@ -2159,21 +2217,18 @@ Tip: I automatically detect and install npm packages from your code imports (lik
     } catch (error: any) {
       setChatMessages(prev => prev.filter(msg => msg.content !== 'Thinking...'));
       addChatMessage(`Error: ${error.message}`, 'system');
-      // Reset generation progress and switch back to preview on error
-      setGenerationProgress({
+      setGenerationError(error.message || 'Generation failed.');
+      // Preserve completed files so a failed edit never destroys the last good version.
+      setGenerationProgress(prev => ({
+        ...prev,
         isGenerating: false,
-        status: '',
-        components: [],
-        currentComponent: 0,
-        streamedCode: '',
+        status: 'Generation paused',
         isStreaming: false,
         isThinking: false,
         thinkingText: undefined,
         thinkingDuration: undefined,
-        files: [],
         currentFile: undefined,
-        lastProcessedPosition: 0
-      });
+      }));
       setActiveTab('preview');
     }
   };
@@ -2262,7 +2317,38 @@ Tip: I automatically detect and install npm packages from your code imports (lik
 
   const handleFileClick = async (filePath: string) => {
     setSelectedFile(filePath);
-    // TODO: Add file content fetching logic here
+    const generatedFile = generationProgress.files.find(file => file.path === filePath);
+    setSelectedFileContent(sandboxFiles[filePath] ?? generatedFile?.content ?? '');
+    setFileSaveState('idle');
+  };
+
+  const saveSelectedFile = async () => {
+    if (!selectedFile || !sandboxData) return;
+    setFileSaveState('saving');
+    try {
+      const response = await fetch('/api/update-sandbox-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: selectedFile, content: selectedFileContent }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Could not save file.');
+
+      setSandboxFiles(prev => ({ ...prev, [selectedFile]: selectedFileContent }));
+      setGenerationProgress(prev => ({
+        ...prev,
+        files: prev.files.map(file => file.path === selectedFile
+          ? { ...file, content: selectedFileContent, edited: true }
+          : file),
+      }));
+      setFileSaveState('saved');
+      if (iframeRef.current && sandboxData.url) {
+        iframeRef.current.src = `${sandboxData.url}?t=${Date.now()}&edited=true`;
+      }
+    } catch (error) {
+      console.error('[file-editor] Save failed:', error);
+      setFileSaveState('error');
+    }
   };
 
   const getFileIcon = (fileName: string) => {
@@ -3934,6 +4020,16 @@ Focus on the key sections and content, making it clean and modern.`;
               </div>
             </div>
             <div className="flex gap-2 items-center">
+              {recoveredLocally && generationProgress.files.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { setRecoveredLocally(false); setActiveTab('generation'); }}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                  title="A previous project was recovered from this browser"
+                >
+                  Recovered locally
+                </button>
+              )}
               {/* Files generated count */}
               {activeTab === 'generation' && !generationProgress.isEdit && generationProgress.files.length > 0 && (
                 <div className="text-gray-500 text-xs font-medium">
