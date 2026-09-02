@@ -55,14 +55,14 @@ export async function GET() {
         // Check file size first
         const statResult = await global.activeSandbox.runCommand({
           cmd: 'stat',
-          args: ['-f', '%z', filePath]
+          args: ['-c', '%s', filePath]
         });
         
         if (statResult.exitCode === 0) {
           const fileSize = parseInt(await statResult.stdout());
           
-          // Only read files smaller than 10KB
-          if (fileSize < 10000) {
+          // Keep the editor responsive while allowing normal React components.
+          if (fileSize < 200000) {
             const catResult = await global.activeSandbox.runCommand({
               cmd: 'cat',
               args: [filePath]
