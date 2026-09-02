@@ -736,7 +736,19 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Send final results
+        if (parsed.files.length > 0 && results.filesCreated.length === 0) {
+          const details = results.errors.join(' | ') || 'No files were written.';
+          await sendProgress({
+            type: 'error',
+            code: details.includes('410') ? 'SANDBOX_EXPIRED' : 'FILE_APPLICATION_FAILED',
+            error: details,
+            message: `Could not apply the generated app. ${details}`,
+            results,
+          });
+          return;
+        }
+
+        // Send final results only when at least one requested file was applied.
         await sendProgress({
           type: 'complete',
           results,

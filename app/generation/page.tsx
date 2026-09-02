@@ -684,7 +684,7 @@ Tip: I automatically detect and install npm packages from your code imports (lik
     }
   };
 
-  const applyGeneratedCode = async (code: string, isEdit: boolean = false, overrideSandboxData?: SandboxData) => {
+  const applyGeneratedCode = async (code: string, isEdit: boolean = false, overrideSandboxData?: SandboxData, retriedExpiredSandbox = false) => {
     setLoading(true);
     log('Applying AI-generated code...');
     
@@ -721,6 +721,7 @@ Tip: I automatically detect and install npm packages from your code imports (lik
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let finalData: any = null;
+      let applicationError: { message: string; code?: string } | null = null;
       
       while (reader) {
         const { done, value } = await reader.read();
@@ -819,7 +820,11 @@ Tip: I automatically detect and install npm packages from your code imports (lik
                   break;
                   
                 case 'error':
-                  addChatMessage(`Error: ${data.message || data.error || 'Unknown error'}`, 'system');
+                  applicationError = {
+                    message: data.message || data.error || 'Unknown error',
+                    code: data.code,
+                  };
+                  addChatMessage(`Error: ${applicationError.message}`, 'system');
                   // Reset loading state on error
                   setLoading(false);
                   break;
@@ -840,6 +845,10 @@ Tip: I automatically detect and install npm packages from your code imports (lik
             }
           }
         }
+      }
+
+      if (applicationError) {
+        throw Object.assign(new Error(applicationError.message), { code: applicationError.code });
       }
       
       // Process final data
@@ -1116,6 +1125,21 @@ Tip: I automatically detect and install npm packages from your code imports (lik
       }
     } catch (error: any) {
       log(`Failed to apply code: ${error.message}`, 'error');
+      const sandboxExpired = error?.code === 'SANDBOX_EXPIRED' || /status code 410|sandbox.*expired/i.test(error?.message || '');
+      if (sandboxExpired && !retriedExpiredSandbox) {
+        addChatMessage('The preview workspace expired. Recreating it and applying your app again…', 'system');
+        try {
+          const replacement = await createSandbox(true) as unknown as SandboxData;
+          if (replacement?.sandboxId && replacement?.url) {
+            setSandboxData(replacement);
+            await applyGeneratedCode(code, isEdit, replacement, true);
+            return;
+          }
+        } catch (recoveryError) {
+          console.error('[applyGeneratedCode] Sandbox recovery failed:', recoveryError);
+        }
+      }
+      setGenerationError(error.message || 'Could not apply the generated files.');
     } finally {
       setLoading(false);
       // Clear isEdit flag after applying code
