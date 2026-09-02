@@ -3,6 +3,7 @@ import { createGroq } from '@ai-sdk/groq';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createGateway } from '@ai-sdk/gateway';
 import { generateText, streamText } from 'ai';
 import type { SandboxState } from '@/types/sandbox';
 import { selectFilesForEdit, getFileContents, formatFilesForAI } from '@/lib/context-selector';
@@ -17,6 +18,12 @@ export const dynamic = 'force-dynamic';
 // Check if we're using Vercel AI Gateway
 const isUsingAIGateway = !!process.env.AI_GATEWAY_API_KEY;
 const aiGatewayBaseURL = 'https://ai-gateway.vercel.sh/v1';
+
+// AI Gateway is a provider, not a provider-specific OpenAI-compatible base
+// URL. Passing its URL into the Google SDK can complete with an empty stream.
+const aiGateway = createGateway({
+  apiKey: process.env.AI_GATEWAY_API_KEY,
+});
 
 console.log('[generate-ai-code-stream] AI Gateway config:', {
   isUsingAIGateway,
@@ -1244,7 +1251,7 @@ MORPH FAST APPLY MODE (EDIT-ONLY):
 
         // Make streaming API call with appropriate provider
         const streamOptions: any = {
-          model: modelProvider(actualModel),
+          model: isUsingAIGateway ? aiGateway(model) : modelProvider(actualModel),
           messages: [
             { 
               role: 'system', 
@@ -1567,7 +1574,7 @@ Spend the available output budget on implementation detail. Prefer 5-8 complete,
               });
 
               const fallbackOptions = {
-                model: groq(fallbackModel),
+                model: isUsingAIGateway ? aiGateway(fallbackModel) : groq(fallbackModel),
                 system: compactFallbackSystem,
                 prompt: compactFallbackPrompt,
                 maxOutputTokens: 8000,
