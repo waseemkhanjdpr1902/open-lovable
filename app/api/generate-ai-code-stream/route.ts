@@ -1305,7 +1305,9 @@ If you're running out of space, generate FEWER files but make them COMPLETE.
 It's better to have 3 complete files than 10 incomplete files.`
             }
           ],
-          maxTokens: 8192, // Reduce to ensure completion
+          // AI SDK v5 uses maxOutputTokens. `maxTokens` was silently ignored,
+          // leaving complex generations at the provider default.
+          maxOutputTokens: appConfig.ai.maxTokens,
           stopSequences: [] // Don't stop early
           // Note: Neither Groq nor Anthropic models support tool/function calling in this context
           // We use XML tags for package detection instead
@@ -1537,13 +1539,24 @@ It's better to have 3 complete files than 10 incomplete files.`
           // Gemini. Do not reuse Gemini's large system/context payload here.
           // A compact, bounded prompt keeps the whole request comfortably
           // below the 8K TPM limit while retaining the user's requirements.
-          const compactFallbackSystem = `You are Codely, a senior React developer. Build a complete, functional, responsive Vite + React website from the user's request.
+          const compactFallbackSystem = `You are Codely, a senior product designer and React developer. Build a polished, production-quality, responsive Vite + React application from the user's request.
 Return only complete project files in this exact XML format:
 <file path="package.json">...</file>
 <file path="src/main.jsx">...</file>
 <file path="src/App.jsx">...</file>
 <file path="src/index.css">...</file>
-Include all required code. Use plain React and CSS unless a dependency is essential. Navigation, buttons, forms, validation, mobile layout and requested interactions must work. Do not use placeholders or omit file content.`;
+You may add complete files under src/components and src/data when they materially improve the application.
+
+QUALITY BAR:
+- Create a distinctive, premium visual system with strong typography, spacing, color, depth, hover/focus states and responsive layouts.
+- Build the full product experience implied by the request, not a minimal landing page or toy demo.
+- Include domain-appropriate sections, realistic sample content and useful empty/loading/success/error states.
+- Make navigation, buttons, forms, validation, filters, modals and other visible controls genuinely work with React state.
+- Support mobile, tablet and desktop and use semantic, accessible HTML.
+- Use plain React and CSS unless a dependency is essential. Never use remote images that may fail; use gradients, CSS artwork or stable public image URLs with graceful fallbacks.
+- Return complete runnable code only. Never use placeholders, TODOs, ellipses, commentary or omitted file content.
+
+Spend the available output budget on implementation detail. Prefer 5-8 complete, coherent files over four oversized files or many incomplete files.`;
           const compactFallbackPrompt = prompt.slice(0, 12000);
 
           for (const fallbackModel of groqFallbackModels) {
@@ -1557,7 +1570,7 @@ Include all required code. Use plain React and CSS unless a dependency is essent
                 model: groq(fallbackModel),
                 system: compactFallbackSystem,
                 prompt: compactFallbackPrompt,
-                maxOutputTokens: 6000,
+                maxOutputTokens: 8000,
                 temperature: 0.3,
               };
 
